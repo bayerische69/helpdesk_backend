@@ -110,13 +110,13 @@ export async function loginAdmin(req, res) {
 
         // 2️⃣ Non-HTTP-only cookie for Next.js middleware routing
         res.cookie('tokenForMiddleware', "true", {
-            httpOnly: false,
-            secure: process.env.NODE_ENV === 'production', // only require HTTPS in production
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            path: '/'
+        httpOnly: false,              // readable by Next.js middleware
+        secure: true,                  // HTTPS required on Vercel
+        sameSite: 'None',              // cross-site allowed
+        path: '/',                     // available on all frontend routes
+        domain: '.vercel.app',         // ✅ allows cookie on helpdesk-frontend-beta-liard.vercel.app
+        maxAge: 7 * 24 * 60 * 60 * 1000
         });
-
         return res.json({ success: true, message: "Logged in successfully" });
 
     } catch (error) {
