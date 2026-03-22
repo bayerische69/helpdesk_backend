@@ -77,51 +77,51 @@ export async function createAdmin(req, res) {
     }
 }
 
+
 export async function loginAdmin(req, res) {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    if (!email || !password) {
-        return res.status(400).json({ message: "Email and password are required" });
-    }
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required" });
+  }
 
-    try {
-        const admin = await Admin.findOne({ email });
+  try {
+    const admin = await Admin.findOne({ email });
+    if (!admin) return res.json({ success: false, message: "Invalid Email" });
 
-        if (!admin) {
-            return res.json({ success: false, message: "Invalid Email" });
-        }
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) return res.json({ success: false, message: "Invalid Password" });
 
-        const isMatch = await bcrypt.compare(password, admin.password);
+    // JWT for API authentication
+    const token = jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-        if (!isMatch) {
-            return res.json({ success: false, message: "Invalid Password" });
-        }
+    // 1️⃣ HTTP-only cookie for backend API
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      domain: process.env.NODE_ENV === "production"
+        ? ".helpdesk-frontend-beta-liard.vercel.app"
+        : undefined,
+    });
 
-        // Generate JWT token
-        const token = jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // 2️⃣ Non-HTTP-only cookie for Next.js middleware
+    res.cookie("tokenForMiddleware", "true", {
+      httpOnly: false, // readable by middleware
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      domain: process.env.NODE_ENV === "production"
+        ? ".helpdesk-frontend-beta-liard.vercel.app"
+        : undefined,
+    });
 
-        // 1️⃣ Secure HTTP-only cookie for backend API authentication
-        res.cookie('token', token, {
-            httpOnly: true,  // 🔒 cannot be read by JS, secure
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-        });
-
-        // 2️⃣ Non-HTTP-only cookie for Next.js middleware routing
-        res.cookie('tokenForMiddleware', "true", {
-            httpOnly: false, // 🔓 readable by middleware
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-        });
-
-        return res.json({ success: true, message: "Logged in successfully" });
-
-    } catch (error) {
-        console.log("Error logging in admin: ", error);
-        res.status(500).json({ message: "Internal Server Error" });
-    }
+    return res.json({ success: true, message: "Logged in successfully" });
+  } catch (error) {
+    console.log("Login error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 }
 
 export async function logoutAdmin(req, res) {
