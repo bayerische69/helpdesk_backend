@@ -78,64 +78,74 @@ export async function createAdmin(req, res) {
 }
 
 export async function loginAdmin(req, res) {
-    const { email, password} = req.body;
+    const { email, password } = req.body;
 
     if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
     }
 
     try {
-        const admin = await Admin.findOne({email})
+        const admin = await Admin.findOne({ email });
 
         if (!admin) {
-            return res.json({ success: false, message: "Invalid Email"})
+            return res.json({ success: false, message: "Invalid Email" });
         }
 
         const isMatch = await bcrypt.compare(password, admin.password);
 
         if (!isMatch) {
-            return res.json({ success: false, message: "Invalid Password"})
+            return res.json({ success: false, message: "Invalid Password" });
         }
 
+        // Generate JWT token
+        const token = jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-
-        const token = jwt.sign({id: admin._id}, process.env.JWT_SECRET, { expiresIn: '7d' });
-
+        // 1️⃣ Secure HTTP-only cookie for backend API authentication
         res.cookie('token', token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-        })
+            httpOnly: true,  // 🔒 cannot be read by JS, secure
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
 
-        return res.json({ success: true, message: "Logged in successfully" });        
+        // 2️⃣ Non-HTTP-only cookie for Next.js middleware routing
+        res.cookie('tokenForMiddleware', "true", {
+            httpOnly: false, // 🔓 readable by middleware
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
 
+        return res.json({ success: true, message: "Logged in successfully" });
 
     } catch (error) {
         console.log("Error logging in admin: ", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
-
-
 }
 
 export async function logoutAdmin(req, res) {
     try {
+        // Clear the secure HTTP-only JWT cookie
         res.clearCookie('token', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days            
-        })
+        });
 
-        return res.json({ success: true, message: "Logged out"})
+        // Clear the middleware cookie (readable by Next.js)
+        res.clearCookie('tokenForMiddleware', {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+        });
 
+        return res.json({ success: true, message: "Logged out" });
     } catch (error) {
         console.log("Error logging out admin: ", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
 }
-
 export const sendVerifyOtp = async (req, res) => {
     try {
 
